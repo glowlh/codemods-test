@@ -1,0 +1,25 @@
+{
+  "name": "ds-codemod",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "eslint": "eslint ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glowlh/ds-codemod.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/glowlh/ds-codemod/issues"
+  },
+  "homepage": "https://github.com/glowlh/ds-codemod#readme",
+  "devDependencies": {
+    "babel-eslint": "^10.0.3",
+    "eslint": "^6.5.0",
+    "eslint-plugin-react": "^7.14.3"
+  }
+}
