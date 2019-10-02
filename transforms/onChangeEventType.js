@@ -3,37 +3,51 @@ module.exports.parser = 'tsx';
 export default function transformer(file, api) {
   const j = api.jscodeshift;
   const root = j(file.source);
-  const COMPONENT_NAME = 'Drum';
+  const COMPONENTS = [
+    'Input',
+    'InputMask',
+    'Select',
+    'Textarea',
+    'Autocomplete',
+    'Checkbox',
+  ];
+  const COMPONENT_NAME = 'Input';
+  const SOURCE_PACKAGE_NAME = '@fcc/rbo-ui';
 
   /**
-   * All import declarations for target component import
+   * Finds import declarations for target component import
    */
   const importDeclarations = root
     .find(j.ImportDeclaration,{
       source: {
         type: "StringLiteral",
-        value: "../drum",
+        value: SOURCE_PACKAGE_NAME,
       }
     });
 
   const localNameSpaces = [];
   /**
-   * Finds name for ImportSpecifier with Identifier type
+   * Finds name for ImportSpecifier
+   * like import { Input } from '@fcc/rbo-ui'
+   * or import { Input as newInput } from '@fcc/rbo-ui'
    */
-  importDeclarations
-    .find(j.ImportSpecifier, {
-      imported: {
-        type: 'Identifier',
-        name: COMPONENT_NAME,
-      }
-    })
-    .forEach(path => {
-      const { node } = path;
-      localNameSpaces.push(node.local.name);
-    });
+  COMPONENTS.forEach(component => {
+    importDeclarations
+      .find(j.ImportSpecifier, {
+        imported: {
+          type: 'Identifier',
+          name: component,
+        }
+      })
+      .forEach(path => {
+        const { node } = path;
+        localNameSpaces.push(node.local.name);
+      });
+  });
 
   /**
-   * Finds name for ImportNamespaceSpecifier with Identifier type
+   * Finds name for ImportNamespaceSpecifier
+   * like import * as Components from '@fcc/rbo-ui'
    */
   importDeclarations
     .find(j.ImportNamespaceSpecifier)
@@ -42,82 +56,31 @@ export default function transformer(file, api) {
       localNameSpaces.push(`${node.local.name}.${COMPONENT_NAME}`);
     });
 
-  console.debug(j.fromPaths);
-
-  // добавить цикл // TODO: нужно пройтись по всем локальным именам и проверить, где используются нужные нам типы атрибутов
-  const targetAttributes =
-    // localNameSpaces
-    //   .reduce((result, nodeObj) => {
-    //
-    //   }, []);
-
-    root
-    .find(j.JSXOpeningElement, {
-      name: {
-        type: 'JSXIdentifier',
-        name: localNameSpaces[0]
-      }
-    })
-    .find(j.JSXAttribute, {
-      name: {
-        type: 'JSXIdentifier',
-        name: 'onChange',
-      }
-    });
-
+  let targetAttributesArray = [];
   /**
-   * Поиск стрелочных функций внутри атрибута
+   * Makes array of target collections with JSXAttribute elements
    */
-  targetAttributes
-    .find(j.ArrowFunctionExpression)
-    .replaceWith(path => {
-      return createType(path, j);
-    });
-
-  /**
-   * Поиск передаваемых методов в проперти
-   * @type {Array}
-   */
-  const handlerNames = [];
-  targetAttributes
-    .find(j.MemberExpression, {
-      object: {
-        type: 'ThisExpression',
-      }
-    })
-    .forEach(path => {
-      const { node } = path;
-      handlerNames.push(node.property.name);
-    });
-  handlerNames.forEach(name => {
-    /**
-     * Поиск всех методов класса как свойств класса (стрелочные функции)
-     */
-    root
-      .find(j.ClassProperty, {
-        key: {
-          name,
-          type: 'Identifier',
+  localNameSpaces.forEach(item => {
+    const collection = root
+      .find(j.JSXOpeningElement, {
+        name: {
+          type: 'JSXIdentifier',
+          name: item,
         }
       })
-      .find(j.ArrowFunctionExpression)
-      .replaceWith(path => {
-        return createType(path, j);
-      });
-
-    /**
-     * Поиск всех методов класса как функций
-     */
-    root
-      .find(j.ClassMethod, {
-        key: {
-          name,
-          type: 'Identifier',
+      .find(j.JSXAttribute, {
+        name: {
+          type: 'JSXIdentifier',
+          name: 'onChange',
         }
-      })
-      .replaceWith(path => {
-        return createType(path, j);
       });
+    targetAttributesArray = targetAttributesArray.concat(collection);
+  });
+
+  targetAttributesArray.forEach(targetAttributes => {
+    replaceInInlineArrowFunctions(targetAttributes, j);
+    replaceInMemberExpression(targetAttributes, j, root);
+    replaceInVariableDeclarator(targetAttributes, j, root);
   });
 
   return root.toSource();
@@ -130,7 +93,7 @@ export default function transformer(file, api) {
  * @returns {*}
  */
 function createType(path, j) {
-  const {node} = path;
+  const { node } = path;
   const params = node.params;
   const argumentTypeAnnotation = params[0].typeAnnotation;
 
@@ -150,4 +113,109 @@ function createType(path, j) {
   }
 
   return node;
+}
+
+/**
+ * Replaces event object type in ArrowFunctions such as inline property
+ * @param {Collection} targetAttributes
+ * @param {object} j
+ */
+function replaceInInlineArrowFunctions(targetAttributes, j) {
+  targetAttributes
+    .find(j.ArrowFunctionExpression)
+    .replaceWith(path => {
+      return createType(path, j);
+    });
+}
+
+/**
+ * Replaces event object type in MemberExpressions such as ClassProperty or ClassMethod
+ * @param {Collection} targetAttributes
+ * @param j
+ * @param {Collection} root
+ */
+function replaceInMemberExpression(targetAttributes, j, root) {
+  const handlerNames = [];
+  targetAttributes
+    .find(j.MemberExpression, {
+      object: {
+        type: 'ThisExpression',
+      }
+    })
+    .forEach(path => {
+      const { node } = path;
+      handlerNames.push(node.property.name);
+    });
+
+  handlerNames.forEach(name => {
+    /**
+     * Replaces types for method argument such as ClassProperty
+     */
+    root
+      .find(j.ClassProperty, {
+        key: {
+          name,
+          type: 'Identifier',
+        }
+      })
+      .find(j.ArrowFunctionExpression)
+      .replaceWith(path => {
+        return createType(path, j);
+      });
+
+    /**
+     * Replaces types for method argument such as ClassMethod
+     */
+    root
+      .find(j.ClassMethod, {
+        key: {
+          name,
+          type: 'Identifier',
+        }
+      })
+      .replaceWith(path => {
+        return createType(path, j);
+      });
+  });
+}
+
+function replaceInVariableDeclarator(targetAttributes, j, root) {
+  const handlerNames = [];
+  targetAttributes
+    .find(j.JSXExpressionContainer)
+    .forEach(path => {
+      const { node } = path;
+      handlerNames.push(node.expression.name);
+    });
+
+  handlerNames.forEach(name => {
+    /**
+     * Replaces types for method argument such as VariableDeclarator
+     */
+    root
+      .find(j.VariableDeclarator, {
+        id: {
+          name,
+          type: 'Identifier',
+        }
+      })
+      .find(j.ArrowFunctionExpression)
+      .replaceWith(path => {
+        return createType(path, j);
+      });
+
+    /**
+     * Replaces types for method argument such as ClassMethod
+     */
+    root
+      .find(j.FunctionDeclaration, {
+        id: {
+          name,
+          type: 'Identifier',
+        }
+      })
+      .replaceWith(path => {
+        return createType(path, j);
+      });
+  });
 }

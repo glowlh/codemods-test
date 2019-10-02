@@ -1,53 +1,131 @@
-import * as React from 'react';
+/**
+ * imports of packages
+ */
+import React, { useState } from 'react';
 import { connect } from 'react-redux';
-import Actions from './redux/actions';
-import './style.scss';
+import { withRouter } from 'react-router-dom'
+import { Button, Input, Typography, Link, Select } from '@fcc/rbo-ui';
+import { Dispatch } from 'redux'
 
-import { Drum } from '../drum';
-import * as AllDrum from '../drum';
-import { Drum as newDrum } from '../drum';
+/**
+ * imports of components
+ */
+import Actions from '../../redux/actions';
 
-interface INightProps {
-  photo?: string;
-  onFetchLoad: Function;
-}
+/**
+ * imports of styles
+ */
+import * as FieldsComponents from '../../../../assets/styles/fields.styles';
+import * as Components from '../sign-up/components/steps/step-login/index.styles';
+import * as ClientAreaComponents from '../../index.styles';
 
-interface INightState {}
+/**
+ * imports of interfaces and constants
+ */
+import { FORM_STATUSES, IRegistrationState } from '../../redux/interfaces/store';
 
-class Night extends React.Component<INightProps, INightState> {
+const ERROR_TEXT = 'Введите корректное значение';
 
-  componentDidMount() {
-    this.props.onFetchLoad();
+const SignInView = ({
+                      invalidLogin,
+                      invalidPassword,
+                      history,
+                      fetchToken,
+                      tokenFormStatus,
+                    }: any): JSX.Element => {
+
+  const [login, setLogin] = useState();
+  const [password, setPassword] = useState();
+
+  const handleSubmit = (event: React.FormEvent<HTMLInputElement>) => {
+    if (tokenFormStatus === FORM_STATUSES.REQUEST) {
+      return;
+    }
+
+    event.preventDefault();
+    fetchToken({
+      'password': password,
+      'subject': login
+    });
+  };
+
+  const handleInput = (e: React.FormEvent<HTMLInputElement> | any) => {}
+
+  function handleSetPassword(event: React.FormEvent<HTMLInputElement>, data: { value: string }) {
+    setPassword(data.value);
   }
 
-  handleOne = (temp: React.FormEvent<HTMLInputElement>) => {}
+  return (
+    <ClientAreaComponents.CardMain as='form' onSubmit={handleSubmit}>
+      <Components.Form>
+        <Components.Field>
+          <FieldsComponents.FieldTitle>Логин</FieldsComponents.FieldTitle>
+          <Select
+            placeholder='Введите логин'
+            value={login}
+            onChange={(event: React.FormEvent<HTMLInputElement>, data: { value: string }) => setLogin(data.value)}
+            invalid={invalidLogin}
+          />
+          {
+            invalidLogin &&
+            <FieldsComponents.FieldErrorMessage>
+              {ERROR_TEXT}
+            </FieldsComponents.FieldErrorMessage>
+          }
+        </Components.Field>
 
-  handleTwo(temp: React.FormEvent<any>) {}
+        <Input
+          placeholder='Введите логин'
+          value={login}
+          onChange={handleSetPassword}
+          invalid={invalidLogin}
+        />
 
-  render() {
-    return (
-      <div className="app-prefix-night">
-      <Drum
-        onChange={(temp: React.FormEvent<HTMLInputElement>) => console.log(temp)}
-      />
+        <Components.Field>
+          <FieldsComponents.FieldTitle>Пароль</FieldsComponents.FieldTitle>
+          <Input
+            placeholder='Введите пароль'
+            type='password'
+            value={password}
+            onChange={handleInput}
+            invalid={invalidPassword}
+          />
+          {
+            invalidPassword &&
+            <FieldsComponents.FieldErrorMessage>
+              {ERROR_TEXT}
+            </FieldsComponents.FieldErrorMessage>
+          }
+        </Components.Field>
 
-      <newDrum
-        onChange={this.handleOne}
-      />
+      </Components.Form>
 
-      <Drum
-        onChange={this.handleTwo}
-      />
-    </div>
-  );
-  }
+      <Components.CardButton>
+        <Button type='submit' onClick={handleSubmit}>Войти</Button>
+      </Components.CardButton>
+      <Typography size='s' type='p'>
+        Если вы еще не зарегистрировались в систему "Окно заёмщика" - <Link
+        onClick={() => { history.push('/?signup') }}
+        underline={true}
+        size='s'
+      >
+        пройдите регистрацию
+      </Link>
+      </Typography>
+    </ClientAreaComponents.CardMain>
+  )
 }
 
-export default connect(
-  (state: any) => ({
-    photo: state.night.photo,
-  }),
-  (dispatch: Function) => ({
-    onFetchLoad: () => dispatch(Actions.fetchLoad()),
-  }),
-)(Night);
+const mapStateToProps = (state: { authorisation: IRegistrationState }) => {
+  return {
+    tokenFormStatus: state.authorisation.formStatuses.token,
+  };
+}
+
+const mapDispatchToProps = (dispatch: Dispatch) => {
+  return {
+    fetchToken: (data: any) => dispatch(Actions.fetchToken(data))
+  };
+}
+
+export const SignIn = connect(mapStateToProps, mapDispatchToProps)(withRouter(SignInView));
